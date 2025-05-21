@@ -11,6 +11,7 @@
 
 import "dotenv/config";
 import { mkdir, writeFile } from "fs/promises";
+import open from "open";
 import path from "path";
 
 // --- CONFIGURABLE VARIABLES ---
@@ -25,7 +26,7 @@ if (!XSRF_TOKEN || !COOKIE) {
     console.warn("[DEBUG] XSRF_TOKEN or COOKIE not set in environment variables. Set them in your .env file.");
 }
 
-// Copy your headers from your browser session here
+// Copy your headers from your browser session here if needed, otherwise just use the XSRF_TOKEN and COOKIE variables in .env like the example
 const HEADERS = {
     accept: "application/json, text/plain, */*",
     "accept-language": "en-US,en;q=0.9",
@@ -59,6 +60,11 @@ async function fetchAllMeetings() {
         if (/\<html/i.test(rawText)) {
             console.error(
                 "[AUTH ERROR] Response contains HTML. Your authentication is incorrect or expired. Check your XSRF_TOKEN and COOKIE."
+            );
+            console.log("\nOpening Fathom login page in your browser...");
+            await open("https://fathom.video/home");
+            console.log(
+                "After logging in, open DevTools > Network, reload the page, and look for the request called 'previous'. Copy the 'cookie' and 'x-xsrf-token' headers from that request and update your .env file. It might be easier to right click the request and use Copy > Copy as cURL"
             );
             process.exit(1);
         }
