@@ -1,0 +1,15 @@
+{
+    "name": "fathom-transcript-downloader",
+    "version": "1.0.0",
+    "type": "module",
+    "devDependencies": {
+        "@types/node": "^22.15.21",
+        "tsx": "^4.7.0"
+    },
+    "scripts": {
+        "download": "tsx download-fathom-transcripts.ts"
+    },
+    "dependencies": {
+        "dotenv": "^16.5.0"
+    }
+}
