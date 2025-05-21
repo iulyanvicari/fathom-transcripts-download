@@ -26,7 +26,8 @@ if (!XSRF_TOKEN || !COOKIE) {
     console.warn("[DEBUG] XSRF_TOKEN or COOKIE not set in environment variables. Set them in your .env file.");
 }
 
-// Copy your headers from your browser session here if needed, otherwise just use the XSRF_TOKEN and COOKIE variables in .env like the example
+// Copy your headers from your browser session here if needed
+// otherwise just use the XSRF_TOKEN and COOKIE variables in .env like the example
 const HEADERS = {
     accept: "application/json, text/plain, */*",
     "accept-language": "en-US,en;q=0.9",
@@ -44,6 +45,31 @@ const HEADERS = {
     "x-xsrf-token": XSRF_TOKEN || "",
     cookie: COOKIE || "",
 };
+
+async function main() {
+    await mkdir(OUTPUT_DIR, { recursive: true });
+
+    // Fetch all paginated meetings
+    const meetings = await fetchAllMeetings();
+    console.log("[DEBUG] Total meetings found:", meetings.length);
+    if (!meetings.length) {
+        console.log("No meetings found.");
+        return;
+    }
+
+    // Download each transcript
+    for (const meeting of meetings) {
+        const id = meeting.id || meeting.call_id || extractIdFromPermalink(meeting.permalink);
+        if (!id) continue;
+        const transcriptUrl = `https://fathom.video/calls/${id}/copy_transcript`;
+        const plainText = await getTranscript(transcriptUrl, id);
+        if (!plainText) continue;
+
+        const filename = getFileName(meeting, id);
+        await writeFile(filename, plainText, "utf8");
+        console.log(`Saved transcript: ${filename}`);
+    }
+}
 
 async function fetchAllMeetings() {
     let allMeetings: any[] = [];
@@ -90,67 +116,53 @@ async function fetchAllMeetings() {
     return allMeetings;
 }
 
-// --- MAIN LOGIC ---
-async function main() {
-    await mkdir(OUTPUT_DIR, { recursive: true });
-
-    // Fetch all paginated meetings
-    const meetings = await fetchAllMeetings();
-    console.log("[DEBUG] Total meetings found:", meetings.length);
-    if (!meetings.length) {
-        console.log("No meetings found.");
-        return;
+async function getTranscript(transcriptUrl: string, id: string): Promise<string | null> {
+    const transcriptRes = await fetch(transcriptUrl, { headers: HEADERS });
+    if (!transcriptRes.ok) {
+        console.warn(`Failed to fetch transcript for meeting ${id}`);
+        return null;
     }
-
-    // 3. Download each transcript
-    for (const meeting of meetings) {
-        const id = meeting.id || meeting.call_id || extractIdFromPermalink(meeting.permalink);
-        if (!id) continue;
-        const transcriptUrl = `https://fathom.video/calls/${id}/copy_transcript`;
-        const transcriptRes = await fetch(transcriptUrl, { headers: HEADERS });
-        if (!transcriptRes.ok) {
-            console.warn(`Failed to fetch transcript for meeting ${id}`);
-            continue;
-        }
-        let transcriptJson;
-        try {
-            transcriptJson = await transcriptRes.json();
-        } catch (e) {
-            console.error(`[DEBUG] Failed to parse transcript JSON for meeting ${id}:`, e);
-            continue;
-        }
-        const plainText = transcriptJson.plain_text;
-        if (!plainText) {
-            console.warn(`[DEBUG] No plain_text field in transcript for meeting ${id}`);
-            continue;
-        }
-        // Get title and date from meeting object
-        const titleRaw = meeting.title || meeting.name || "meeting";
-        const title = titleRaw
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "_")
-            .replace(/^_+|_+$/g, "");
-        // Use started_at for the date
-        if (!meeting.started_at) {
-            console.warn(`[DEBUG] No started_at field in meeting for id ${id}`);
-        }
-        let dateStr = "unknown-date";
-        if (meeting.started_at) {
-            const dateObj = new Date(meeting.started_at);
-            if (!isNaN(dateObj.getTime())) {
-                const month = dateObj.toLocaleString("en-US", { month: "short" }).toLowerCase();
-                const day = dateObj.getDate();
-                const hour = dateObj.getHours().toString().padStart(2, "0");
-                const min = dateObj.getMinutes().toString().padStart(2, "0");
-                dateStr = `${month}-${day}-${hour}${min}`;
-            } else {
-                console.warn(`[DEBUG] Could not parse started_at for meeting id ${id}:`, meeting.started_at);
-            }
-        }
-        const filename = path.join(OUTPUT_DIR, `transcript-${title}-${dateStr}.txt`);
-        await writeFile(filename, plainText, "utf8");
-        console.log(`Saved transcript: ${filename}`);
+    let transcriptJson;
+    try {
+        transcriptJson = await transcriptRes.json();
+    } catch (e) {
+        console.error(`[DEBUG] Failed to parse transcript JSON for meeting ${id}:`, e);
+        return null;
     }
+    const plainText = transcriptJson.plain_text;
+    if (!plainText) {
+        console.warn(`[DEBUG] No plain_text field in transcript for meeting ${id}`);
+        return null;
+    }
+    return plainText;
+}
+
+// Get title and date from meeting object
+function getFileName(meeting: any, id: any) {
+    const titleRaw = meeting.title || meeting.name || "meeting";
+    const title = titleRaw
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    // Use started_at for the date
+    if (!meeting.started_at) {
+        console.warn(`[DEBUG] No started_at field in meeting for id ${id}`);
+    }
+    let dateStr = "unknown-date";
+    if (meeting.started_at) {
+        const dateObj = new Date(meeting.started_at);
+        if (!isNaN(dateObj.getTime())) {
+            const month = dateObj.toLocaleString("en-US", { month: "short" }).toLowerCase();
+            const day = dateObj.getDate();
+            const hour = dateObj.getHours().toString().padStart(2, "0");
+            const min = dateObj.getMinutes().toString().padStart(2, "0");
+            dateStr = `${month}-${day}-${hour}${min}`;
+        } else {
+            console.warn(`[DEBUG] Could not parse started_at for meeting id ${id}:`, meeting.started_at);
+        }
+    }
+    const filename = path.join(OUTPUT_DIR, `transcript-${title}-${dateStr}.txt`);
+    return filename;
 }
 
 function extractIdFromPermalink(permalink: string): string | null {
