@@ -11,3 +11,5 @@ yarn-error.log*
 
 # Env/config
 .env
+
+.DS_Store
