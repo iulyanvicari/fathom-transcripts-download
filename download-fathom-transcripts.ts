@@ -87,7 +87,7 @@ async function fetchAllMeetings() {
             console.error(
                 "[AUTH ERROR] Response contains HTML. Your authentication is incorrect or expired. Check your XSRF_TOKEN and COOKIE."
             );
-            console.log("\nOpening Fathom login page in your browser...");
+            console.log("\nOpening Fathom home page in your browser...");
             await open("https://fathom.video/home");
             console.log(
                 "After logging in, open DevTools > Network, reload the page, and look for the request called 'previous'. Copy the 'cookie' and 'x-xsrf-token' headers from that request and update your .env file. It might be easier to right click the request and use Copy > Copy as cURL"
